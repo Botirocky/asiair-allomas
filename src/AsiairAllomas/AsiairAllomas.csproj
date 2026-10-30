@@ -12,7 +12,7 @@
     <RootNamespace>AsiairAllomas</RootNamespace>
     <Product>ASIAIR Állomás</Product>
     <Company>Botirocky</Company>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
