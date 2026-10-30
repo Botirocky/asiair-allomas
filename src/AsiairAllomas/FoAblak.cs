@@ -8,15 +8,20 @@ public sealed class FoAblak : Form
 {
     private const int LassuFrissites = 30_000;
     private const int GyorsFrissites = 5_000;
+    private const int FrissitesKereses = 6 * 60 * 60 * 1000;
     private const string PanelCim = "https://asiair.park.lan/";
 
     private readonly Beallitas _beallitas = Beallitas.Betolt();
     private readonly System.Windows.Forms.Timer _idozito = new();
+    private readonly System.Windows.Forms.Timer _frissitesIdozito = new();
+    private readonly Frissito _frissito = new();
     private readonly Panel _fej = new();
     private readonly Panel _lab = new();
     private readonly EgSav _eg = new();
     private readonly ListBox _lista = new();
     private readonly Galeria _galeria = new();
+    private readonly LaposGomb _frissites = new() { Kiemelt = true, Visible = false };
+    private readonly LaposGomb _kereses = new() { Dock = DockStyle.Right };
     private readonly LaposGomb _mentes = new() { Text = "Mentés most", Kiemelt = true };
     private readonly LaposGomb _fotok = new() { Text = "Fotók mappája" };
     private readonly LaposGomb _eszkoz = new() { Text = "ASIAIR megosztása" };
@@ -29,6 +34,8 @@ public sealed class FoAblak : Form
     private PanelAdat? _adat;
     private string? _kivalasztott;
     private string? _uzenet;
+    private string? _frissitoSzoveg;
+    private UjVerzio? _uj;
     private bool _frissul;
 
     public FoAblak()
@@ -46,6 +53,8 @@ public sealed class FoAblak : Form
         _labSzoveg.Dock = DockStyle.Fill;
         _labSzoveg.TextAlign = ContentAlignment.MiddleLeft;
         _lab.Controls.Add(_labSzoveg);
+        _kereses.Text = $"Verzió {Frissito.Jelenlegi}: frissítés keresése";
+        _lab.Controls.Add(_kereses);
 
         _lista.DrawMode = DrawMode.OwnerDrawFixed;
         _lista.BorderStyle = BorderStyle.None;
@@ -61,7 +70,7 @@ public sealed class FoAblak : Form
         _fej.Dock = DockStyle.Top;
         _lab.Dock = DockStyle.Bottom;
 
-        _fej.Controls.AddRange([_allapot, _mentes, _fotok, _eszkoz, _panel, _vorosGomb]);
+        _fej.Controls.AddRange([_allapot, _frissites, _mentes, _fotok, _eszkoz, _panel, _vorosGomb]);
         _fej.Resize += (_, _) => FejElrendez();
 
         Controls.Add(_galeria);
@@ -75,9 +84,13 @@ public sealed class FoAblak : Form
         _eszkoz.Click += (_, _) => Megnyit($@"\\{_adat?.Eszkoz.Cim ?? "asiair.local"}");
         _panel.Click += (_, _) => Megnyit(PanelCim);
         _vorosGomb.Click += (_, _) => VorosValt();
+        _frissites.Click += async (_, _) => await FrissitesTelepitAsync();
+        _kereses.Click += async (_, _) => await FrissitesKeresAsync(true);
 
         _idozito.Interval = LassuFrissites;
         _idozito.Tick += async (_, _) => await FrissitAsync();
+        _frissitesIdozito.Interval = FrissitesKereses;
+        _frissitesIdozito.Tick += async (_, _) => await FrissitesKeresAsync(false);
 
         MeretekAlkalmaz();
         TemaAlkalmaz();
@@ -94,6 +107,9 @@ public sealed class FoAblak : Form
         base.OnShown(e);
         Tema.Cimsor(this);
         Tema.SotetGorgeto(_lista);
+        _ = Frissito.RegiTorolAsync();
+        _ = FrissitesKeresAsync(false);
+        _frissitesIdozito.Start();
         var jelszo = _beallitas.Jelszo();
         if (jelszo is not null)
         {
@@ -135,6 +151,8 @@ public sealed class FoAblak : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         _idozito.Dispose();
+        _frissitesIdozito.Dispose();
+        _frissito.Dispose();
         _kapcsolat?.Dispose();
         base.OnFormClosed(e);
     }
@@ -153,10 +171,12 @@ public sealed class FoAblak : Form
         _allapot.Font = Tema.Betu(10);
         _labSzoveg.Font = Tema.Betu(9);
         foreach (var gomb in Gombok()) gomb.Font = Tema.Betu(10);
+        _kereses.Font = Tema.Betu(9);
+        _kereses.Width = Tema.Meret(_kereses.Text, _kereses.Font).Width + this.Skala(20);
         FejElrendez();
     }
 
-    private LaposGomb[] Gombok() => [_mentes, _fotok, _eszkoz, _panel, _vorosGomb];
+    private LaposGomb[] Gombok() => [_frissites, _mentes, _fotok, _eszkoz, _panel, _vorosGomb];
 
     private void FejElrendez()
     {
@@ -367,8 +387,9 @@ public sealed class FoAblak : Form
 
     private string LabSzoveg()
     {
-        if (_adat is null) return "";
         var reszek = new List<string>();
+        if (_frissitoSzoveg is not null) reszek.Add(_frissitoSzoveg);
+        if (_adat is null) return string.Join("; ", reszek);
         var m = _adat.Mentes;
         if (m is { Fut: true, Haladas: { } h })
         {
@@ -386,6 +407,55 @@ public sealed class FoAblak : Form
             ? $"SSD: {Tema.Bajt(l.Szabad)} szabad" + (l.EjszakaEleg is { } ej ? $", kb. {ej:0} éjszakára elég" : "")
             : "Az SSD nincs csatlakoztatva");
         return string.Join("; ", reszek);
+    }
+
+    private async Task FrissitesKeresAsync(bool kezi)
+    {
+        _kereses.Enabled = false;
+        if (kezi) _frissitoSzoveg = null;
+        try
+        {
+            _uj = await _frissito.KeresAsync();
+            _frissites.Text = _uj is null ? "" : $"Frissítés erre: {_uj.Verzio}";
+            _frissites.Visible = _uj is not null;
+            if (kezi && _uj is null) _frissitoSzoveg = $"A legfrissebb verzió fut ({Frissito.Jelenlegi})";
+        }
+        catch (FrissitesHiba h)
+        {
+            if (kezi) _frissitoSzoveg = h.Message;
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
+        if (IsDisposed) return;
+        _kereses.Enabled = true;
+        AllapotKiir();
+    }
+
+    private async Task FrissitesTelepitAsync()
+    {
+        if (_uj is not { } uj) return;
+        _frissites.Enabled = false;
+        _kereses.Enabled = false;
+        var haladas = new Progress<int>(szazalek =>
+        {
+            _frissitoSzoveg = $"Frissítés letöltése: {szazalek} %";
+            _labSzoveg.Text = LabSzoveg();
+        });
+        try
+        {
+            await _frissito.TelepitAsync(uj, haladas);
+            Close();
+        }
+        catch (FrissitesHiba h)
+        {
+            _frissitoSzoveg = h.Message;
+            _frissites.Enabled = true;
+            _kereses.Enabled = true;
+            AllapotKiir();
+        }
     }
 
     private async Task MentesAsync()

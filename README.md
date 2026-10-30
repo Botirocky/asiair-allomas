@@ -6,6 +6,12 @@ Windows-alkalmazás a picloudra mentett ASIAIR-fotókhoz: ma éjjeli ég, célpo
 
 ![Vörös mód](docs/voros.png)
 
+## Frissítés
+
+Induláskor és hatóránként megnézi a GitHub legújabb kiadását. Ha van újabb, megjelenik a „Frissítés erre” gomb: letölti, ellenőrzi, kicseréli magát és újraindul. Kézzel a jobb alsó sarokban lehet keresni.
+
+Új kiadás: `./kiadas.sh X.Y.Z` a main ágról. A kiadás csomagjának neve `AsiairAllomas.exe` kell legyen.
+
 ## Fordítás
 
 ```
